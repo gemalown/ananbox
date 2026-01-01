@@ -1,14 +1,126 @@
 <resources>
     <string name="app_name">Ananbox</string>
     <string name="title_settings">Settings</string>
-    <string name="title_activity_settings">SettingsActivity</string>
-    <string name="settings_shutdown_key">shutdown</string>
-    <string name="settings_shutdown_title">Shutdown</string>
-    <string name="settings_shutdown_summary">Shutdown Ananbox immediately</string>
+    <string name="title_activity_main">Ananbox</string>
     <string name="rom_installer_title">Install rom</string>
-    <string name="rom_installer_message">Please select a rom file (.7z) on your phone</string>
+    <string name="rom_installer_message">Please select the rootfs.tar.gz file on your phone</string>
     <string name="rom_installer_install">Select a file</string>
     <string name="rom_installer_extracting_title">Extracting</string>
     <string name="rom_installer_extracting_msg">Extracting rom file..</string>
     <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    
+    <!-- Error messages -->
+    <string name="rootfs_open_failed">Failed to open rootfs file</string>
+    <string name="rootfs_extract_failed">Failed to extract rootfs. Please try again.</string>
+    
+    <!-- Local Mode Settings (not foldable) -->
+    <string name="settings_local_category">Local Mode</string>
+    <string name="settings_local_jni_key">local_jni_toggle</string>
+    <string name="settings_local_jni_title">Connect JNI Container</string>
+    <string name="settings_local_jni_summary">Connect to container (starts if not running)</string>
+    <string name="settings_local_server_key">local_server_toggle</string>
+    <string name="settings_local_server_title">Start Local Server</string>
+    <string name="settings_local_server_summary">Start embedded server in background (toggle off to stop)</string>
+    <string name="settings_local_server_summary_on">Local server running in background</string>
+    <string name="settings_local_server_summary_off">Toggle on to start local server</string>
+    <string name="settings_local_server_address_key">local_server_address</string>
+    <string name="settings_local_server_address_title">Local Server Address</string>
+    <string name="settings_local_server_address_summary">Address:port for local server streaming (default: 127.0.0.1:15558)</string>
+    <string name="settings_local_server_address_default">127.0.0.1:15558</string>
+    <string name="settings_local_adb_address_key">local_adb_address</string>
+    <string name="settings_local_adb_address_title">Local ADB Address</string>
+    <string name="settings_local_adb_address_summary">Address:port for ADB forwarding (default: 127.0.0.1:15555, empty to disable)</string>
+    <string name="settings_local_adb_address_default">127.0.0.1:15555</string>
+    <string name="settings_basedir_key">basedir</string>
+    <string name="settings_basedir_title">Base Directory</string>
+    <string name="settings_basedir_summary">Base directory for Ananbox data</string>
+    <string name="settings_basedir_default">/data/user/0/com.github.ananbox</string>
+    <string name="embedded_server_starting">Starting local server…</string>
+    <string name="embedded_server_started">Local server started on port %1$d</string>
+    <string name="embedded_server_stopped">Local server stopped</string>
+    <string name="embedded_server_failed">Failed to start local server: %1$s</string>
+    <string name="jni_container_starting">Starting container via JNI…</string>
+    <string name="jni_container_started">Container started via JNI</string>
+    <string name="jni_container_stopped">Container stopped</string>
+    <string name="jni_container_stopping_sigint">Sending SIGINT… Click again for SIGTERM</string>
+    <string name="jni_container_stopping_sigterm">Sending SIGTERM… Click again to force kill</string>
+    <string name="jni_container_stopped_sigkill">Container killed (SIGKILL)</string>
+    <string name="jni_container_failed">Failed to start container: %1$s</string>
+    <string name="settings_shutdown_jni_key">shutdown_jni</string>
+    <string name="settings_shutdown_jni_title">Shutdown JNI Container</string>
+    <string name="settings_shutdown_jni_summary">Click: SIGINT → SIGTERM → SIGKILL</string>
+    
+    <!-- Local Server Shutdown Messages -->
+    <string name="local_server_stopping_sigint">Sending SIGINT… Toggle off again for SIGTERM</string>
+    <string name="local_server_stopping_sigterm">Sending SIGTERM… Toggle off again to force kill</string>
+    <string name="local_server_stopped_sigkill">Server killed (SIGKILL)</string>
+    
+    <!-- Remote Mode Settings (not foldable) -->
+    <string name="settings_remote_category">Remote Mode</string>
+    <string name="settings_remote_streaming_key">remote_streaming_toggle</string>
+    <string name="settings_remote_streaming_title">Use Streaming</string>
+    <string name="settings_remote_streaming_summary">Connect to remote server via streaming</string>
+    <string name="settings_remote_scrcpy_key">remote_scrcpy_toggle</string>
+    <string name="settings_remote_scrcpy_title">Use scrcpy via ADB</string>
+    <string name="settings_remote_scrcpy_summary">Connect to remote server via scrcpy over ADB</string>
+    <string name="settings_remote_streaming_address_key">remote_streaming_address</string>
+    <string name="settings_remote_streaming_address_title">Remote Streaming Address</string>
+    <string name="settings_remote_streaming_address_summary">Address:port for streaming connection</string>
+    <string name="settings_remote_streaming_address_default">127.0.0.1:15558</string>
+    <string name="settings_remote_adb_address_key">remote_adb_address</string>
+    <string name="settings_remote_adb_address_title">Remote ADB Address</string>
+    <string name="settings_remote_adb_address_summary">Address:port for ADB/scrcpy connection</string>
+    <string name="settings_remote_adb_address_default">127.0.0.1:15555</string>
+    
+    <!-- Settings group (foldable) -->
+    <string name="settings_general_category">Settings</string>
+    <string name="settings_verbose_key">verbose_mode</string>
+    <string name="settings_verbose_title">Verbose Mode</string>
+    <string name="settings_verbose_summary">Enable detailed logging for debugging</string>
+    <string name="settings_logs_key">view_logs</string>
+    <string name="settings_logs_title">View Logs</string>
+    <string name="settings_logs_summary">View system and proot logs</string>
+    <string name="settings_logs_empty">No log files found</string>
+    <string name="settings_export_logs_key">export_logs</string>
+    <string name="settings_export_logs_title">Export Logs</string>
+    <string name="settings_export_logs_summary">Share diagnostic logs as tarball</string>
+    <string name="settings_clear_logs_key">clear_logs</string>
+    <string name="settings_clear_logs_title">Clear Logs</string>
+    <string name="settings_clear_logs_summary">Delete all log files</string>
+    <string name="settings_clear_logs_confirm_title">Clear Logs?</string>
+    <string name="settings_clear_logs_confirm_message">This will delete all log files. This action cannot be undone.</string>
+    <string name="settings_clear_logs_success">Logs cleared successfully</string>
+    <string name="settings_clear_logs_failed">Failed to clear logs</string>
+    <string name="settings_about_key">about</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_about_summary">App info, licenses, and copyright</string>
+    <string name="about_dialog_title">About Ananbox</string>
+    <string name="about_dialog_message">Ananbox v%1$s\n\nAnother rootless Android container on Android.\n\nLicensed under GPL v2 (due to PRoot dependency)\n\n⚠️ AI-GENERATED CONTENT NOTICE ⚠️\nThis app is a fork of https://github.com/Ananbox/ananbox\nModifications and additions made by GitHub Copilot (AI) are not subject to copyright protection. AI-generated content is dedicated to the public domain.\n\n📦 DEPENDENCIES AND LICENSES 📦\n\n• Anbox - Apache License 2.0\n  © 2016-2017 Canonical Ltd.\n  Android container runtime\n\n• PRoot - GPL v2\n  © Cédric VINCENT\n  User-space implementation of chroot\n\n• Boost C++ Libraries - Boost License 1.0\n  © Various Contributors\n  Portable C++ source libraries\n\n• scrcpy-server - Apache License 2.0\n  © 2018-2024 Genymobile\n  Display and control Android devices\n\n• AndroidX Libraries - Apache License 2.0\n  © Google LLC\n  Android support libraries\n\n• Apache Commons Compress - Apache License 2.0\n  © Apache Software Foundation\n  Working with archive formats\n\n• libpng - libpng License\n  © 1995-2024 PNG Authors\n  PNG reference library\n\n• backward-cpp - MIT License\n  Stack trace library\n\nNote: Due to GPL v2 dependency (PRoot), this project as a whole is licensed under GPL v2.\n\nFor full license texts, see the source repository.</string>
+    
+    <!-- Connection Status -->
+    <string name="remote_connecting">Connecting to %1$s:%2$s…</string>
+    <string name="remote_connected">Connected to remote server</string>
+    <string name="remote_disconnected">Disconnected from server</string>
+    <string name="remote_connection_failed">Failed to connect: %1$s</string>
+    <string name="adb_connecting">Connecting via ADB to %1$s:%2$s…</string>
+    <string name="adb_connect_command">adb connect %1$s:%2$s</string>
+    <string name="adb_connect_hint">Run this command to connect:\nadb connect %1$s:%2$s</string>
+    <string name="scrcpy_hint">Then run scrcpy:\nscrcpy -s %1$s:%2$s</string>
+    <string name="adb_command_copied">ADB command copied to clipboard</string>
+    <string name="scrcpy_connecting">Connecting via scrcpy to %1$s:%2$s…</string>
+    <string name="scrcpy_connected">Connected via scrcpy: %1$s (%2$dx%3$d)</string>
+    <string name="scrcpy_disconnected">scrcpy disconnected</string>
+    <string name="scrcpy_error">scrcpy error: %1$s</string>
+    
+    <!-- Legacy keys for backward compatibility -->
+    <string name="settings_connection_mode_key">connection_mode</string>
+    <string name="connection_mode_local_jni">Local - Direct (JNI)</string>
+    <string name="connection_mode_local_server">Local - Background Server</string>
+    <string name="connection_mode_remote_legacy">Remote - Streaming</string>
+    <string name="connection_mode_remote_scrcpy">Remote - scrcpy via ADB</string>
+    <string name="connection_mode_local_jni_value">local_jni</string>
+    <string name="connection_mode_local_server_value">local_server</string>
+    <string name="connection_mode_remote_legacy_value">remote_legacy</string>
+    <string name="connection_mode_remote_scrcpy_value">remote_scrcpy</string>
 </resources>

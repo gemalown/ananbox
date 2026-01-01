@@ -13,3 +13,16 @@
 .externalNativeBuild
 .cxx
 local.properties
+app/src/main/cpp/build-*/
+_codeql_detected_source_root
+# Proot build artifacts
+app/src/main/cpp/proot/src/build.h
+app/src/main/cpp/proot/src/**/*.o
+app/src/main/cpp/proot/src/*.o
+app/src/main/cpp/proot/src/proot
+app/src/main/cpp/proot/src/**/*.d
+app/src/main/cpp/proot/src/*.d
+app/src/main/cpp/proot/src/loader/loader*
+app/src/main/cpp/proot/src/loader/assembly*.o
+# Boost library - extracted from boost-minimal.tar.xz during build
+app/src/main/cpp/boost/
