@@ -353,6 +353,8 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
     __android_log_print(ANDROID_LOG_INFO, TAG, "Using PROOT_LOADER: %s", loader_path);
     
     // Build proot command matching run.sh exactly (now with configurable options)
+    // Since we chdir to rootfs, paths are relative to rootfs
+    // qemu_pipe is in parent directory, so use ../qemu_pipe
     const char* proot_args[] = {
         proot,
         "--kill-on-exit",
@@ -369,7 +371,7 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
         "-b", "dev/socket:/dev/socket",
         "-b", "/dev/binder",
         "-b", "/dev/ashmem",
-        "-b", "qemu_pipe:/dev/qemu_pipe",
+        "-b", "../qemu_pipe:/dev/qemu_pipe",  // qemu_pipe is in parent directory
         "-b", "dev/input:/dev/input",
         "-b", "mnt/user/0:/storage/self",
         "-v", verbose_str,  // Configurable verbose level
@@ -382,7 +384,9 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
     __android_log_print(ANDROID_LOG_INFO, TAG, "Verbose level: %s", verbose_str);
     __android_log_print(ANDROID_LOG_INFO, TAG, "Init path: %s", init_path);
     __android_log_print(ANDROID_LOG_INFO, TAG, "PROOT_TMP_DIR: ./tmp");
-    __android_log_print(ANDROID_LOG_INFO, TAG, "Command: %s --kill-on-exit -r . -0 -w / [bind mounts...] -v %s %s", proot, verbose_str, init_path);
+    
+    // Display full proot command for debugging
+    __android_log_print(ANDROID_LOG_INFO, TAG, "Command: %s --kill-on-exit -r . -0 -w / -b /dev -b /proc -b /sys -b dev/kmsg:/dev/kmsg -b dev/pmsg0:/dev/pmsg0 -b system/vendor:/vendor -b dev/__properties__:/dev/__properties__ -b dev/socket:/dev/socket -b /dev/binder -b /dev/ashmem -b ../qemu_pipe:/dev/qemu_pipe -b dev/input:/dev/input -b mnt/user/0:/storage/self -v %s %s", proot, verbose_str, init_path);
     
     env->ReleaseStringUTFChars(proot_, proot);
     env->ReleaseStringUTFChars(init_path_, init_path);
@@ -716,7 +720,7 @@ int main(int argc, char* argv[]) {
     std::string stream_bind = "0.0.0.0";  // Streaming server bind address
     std::string proot_log_dest;  // Proot log destination (empty = disabled)
     std::string container_logcat_dest;  // Container logcat destination (empty = disabled)
-    std::string verbose_level = "quiet";  // Default: quiet (matching working command), options: quiet, normal, verbose, extra
+    std::string verbose_level = "verbose";  // Default: verbose, options: quiet, normal, verbose, extra
     std::string custom_parameters;  // Custom proot parameters (overrides default proot args)
     std::string working_directory;  // Directory to launch proot in (empty = use rootfs)
     bool stop_parsing = false;  // Stop argument parsing and pass remaining args to proot
@@ -832,7 +836,7 @@ int main(int argc, char* argv[]) {
         EXTRA     // Extra verbose output
     };
     
-    VerboseLevel verbose = VerboseLevel::QUIET;  // Default to match working command
+    VerboseLevel verbose = VerboseLevel::VERBOSE;  // Default to verbose
     if (verbose_level == "quiet") {
         verbose = VerboseLevel::QUIET;
     } else if (verbose_level == "normal") {
@@ -1426,20 +1430,152 @@ int main(int argc, char* argv[]) {
                 fprintf(stderr, "Using PROOT_LOADER: %s\n", loader_path.c_str());
             }
             
-            // Build proot command with bind mounts using relative paths
-            // After chdir to rootfs, we use proot -r . with relative paths for binds
-            // This matches the working command from the rootfs directory
+            // Build proot command with bind mounts
+            // Compute relative paths from proot_working_dir to rootfs items
+            // This ensures bind mounts work regardless of where proot is launched from
+            
+            // Helper function to safely check if child_path is a subdirectory of parent_path
+            // Returns true if child_path is under parent_path (e.g., /a/b is under /a)
+            // Parameters: is_subdirectory(parent, child) -> checks if child is under parent
+            auto is_subdirectory = [](const std::string& parent_path, const std::string& child_path) -> bool {
+                // Normalize parent path (remove trailing slash if present)
+                std::string normalized_parent = parent_path;
+                while (normalized_parent.length() > 1 && normalized_parent.back() == '/') {
+                    normalized_parent.pop_back();
+                }
+                
+                if (child_path.length() <= normalized_parent.length()) {
+                    return false;
+                }
+                // Check if child starts with parent
+                if (child_path.compare(0, normalized_parent.length(), normalized_parent) != 0) {
+                    return false;
+                }
+                // Ensure it's a proper subdirectory (next char must be '/')
+                return child_path[normalized_parent.length()] == '/';
+            };
+            
+            // Helper function to safely join paths, avoiding double slashes
+            auto join_paths = [](const std::string& base, const std::string& append) -> std::string {
+                if (base.empty()) return append;
+                if (append.empty()) return base;
+                
+                bool base_has_slash = base.back() == '/';
+                bool append_has_slash = append.front() == '/';
+                
+                if (base_has_slash && append_has_slash) {
+                    return base + append.substr(1);
+                } else if (!base_has_slash && !append_has_slash) {
+                    return base + "/" + append;
+                } else {
+                    return base + append;
+                }
+            };
+            
+            // Helper function to compute relative path from 'from' to 'to'
+            // Both paths must be absolute
+            auto compute_relative_path = [](const std::string& from, const std::string& to) -> std::string {
+                // If they're the same, return "."
+                if (from == to) {
+                    return ".";
+                }
+                
+                // Split paths into components
+                auto split_path = [](const std::string& path) -> std::vector<std::string> {
+                    std::vector<std::string> components;
+                    std::string current;
+                    for (char c : path) {
+                        if (c == '/') {
+                            if (!current.empty()) {
+                                components.push_back(current);
+                                current.clear();
+                            }
+                        } else {
+                            current += c;
+                        }
+                    }
+                    if (!current.empty()) {
+                        components.push_back(current);
+                    }
+                    return components;
+                };
+                
+                auto from_parts = split_path(from);
+                auto to_parts = split_path(to);
+                
+                // Find common prefix
+                size_t common = 0;
+                while (common < from_parts.size() && common < to_parts.size() &&
+                       from_parts[common] == to_parts[common]) {
+                    common++;
+                }
+                
+                // Build relative path
+                std::string result;
+                // Add ".." for each remaining component in from_parts
+                for (size_t i = common; i < from_parts.size(); i++) {
+                    if (!result.empty()) result += "/";
+                    result += "..";
+                }
+                // Add remaining components from to_parts
+                for (size_t i = common; i < to_parts.size(); i++) {
+                    if (!result.empty()) result += "/";
+                    result += to_parts[i];
+                }
+                
+                return result.empty() ? "." : result;
+            };
+            
+            // Get relative path from working directory to rootfs
+            std::string rootfs_rel;
+            if (proot_working_dir == rootfs_path) {
+                // Working dir IS rootfs, use "."
+                rootfs_rel = ".";
+            } else if (proot_working_dir[0] == '/' && rootfs_path[0] == '/') {
+                // Both are absolute, compute relative path
+                rootfs_rel = compute_relative_path(proot_working_dir, rootfs_path);
+            } else if (is_subdirectory(proot_working_dir, rootfs_path)) {
+                // Check: is rootfs_path under proot_working_dir?
+                // If yes, rootfs is a subdirectory of working dir, use simple relative path
+                rootfs_rel = rootfs_path.substr(proot_working_dir.length() + 1);
+            } else {
+                // Cannot compute relative path - this is an error
+                fprintf(stderr, "ERROR: Cannot compute relative path from %s to %s\n",
+                        proot_working_dir.c_str(), rootfs_path.c_str());
+                fprintf(stderr, "Please ensure rootfs path is accessible from working directory\n");
+                exit(1);
+            }
             
             // Store bind mount strings to prevent temporary string destruction
-            // Using relative paths from rootfs directory (since we chdir to rootfs)
-            std::string bind_dev_kmsg = "dev/kmsg:/dev/kmsg";
-            std::string bind_dev_pmsg0 = "dev/pmsg0:/dev/pmsg0";
-            std::string bind_vendor = "system/vendor:/vendor";
-            std::string bind_dev_properties = "dev/__properties__:/dev/__properties__";
-            std::string bind_dev_socket = "dev/socket:/dev/socket";
-            std::string bind_qemu_pipe = "qemu_pipe:/dev/qemu_pipe";
-            std::string bind_dev_input = "dev/input:/dev/input";
-            std::string bind_mnt_user = "mnt/user/0:/storage/self";
+            // Use paths relative to working directory
+            std::string bind_dev_kmsg = join_paths(rootfs_rel, "dev/kmsg") + ":/dev/kmsg";
+            std::string bind_dev_pmsg0 = join_paths(rootfs_rel, "dev/pmsg0") + ":/dev/pmsg0";
+            std::string bind_vendor = join_paths(rootfs_rel, "system/vendor") + ":/vendor";
+            std::string bind_dev_properties = join_paths(rootfs_rel, "dev/__properties__") + ":/dev/__properties__";
+            std::string bind_dev_socket = join_paths(rootfs_rel, "dev/socket") + ":/dev/socket";
+            // qemu_pipe is in the base directory (parent of rootfs), not inside rootfs
+            std::string base_path = get_parent_dir(rootfs_path);
+            std::string qemu_pipe_rel;
+            if (proot_working_dir == base_path) {
+                qemu_pipe_rel = "qemu_pipe";
+            } else if (proot_working_dir[0] == '/' && base_path[0] == '/') {
+                // Both are absolute, compute relative path to base_path, then append qemu_pipe
+                std::string base_rel = compute_relative_path(proot_working_dir, base_path);
+                qemu_pipe_rel = join_paths(base_rel, "qemu_pipe");
+            } else if (is_subdirectory(proot_working_dir, base_path)) {
+                // Check: is base_path under proot_working_dir?
+                // If yes, base_path is a subdirectory of working dir, use simple relative path
+                qemu_pipe_rel = join_paths(base_path.substr(proot_working_dir.length() + 1), "qemu_pipe");
+            } else {
+                // Cannot compute relative path - this is an error
+                fprintf(stderr, "ERROR: Cannot compute relative path for qemu_pipe from %s to %s\n",
+                        proot_working_dir.c_str(), base_path.c_str());
+                fprintf(stderr, "Please ensure base path is accessible from working directory\n");
+                exit(1);
+            }
+            std::string bind_qemu_pipe = qemu_pipe_rel + ":/dev/qemu_pipe";
+            std::string bind_dev_input = join_paths(rootfs_rel, "dev/input") + ":/dev/input";
+            std::string bind_mnt_user = join_paths(rootfs_rel, "mnt/user/0") + ":/storage/self";
             
             // Map verbose level to proot's -v option (0=quiet, 1=normal, 2=verbose, 3=extra)
             const char* proot_verbose_level;
@@ -1493,10 +1629,10 @@ int main(int argc, char* argv[]) {
                 
                 fprintf(stderr, "Using custom proot parameters: %s\n", custom_parameters.c_str());
             } else {
-                // Default proot parameters matching the working command
+                // Default proot parameters
                 proot_args.push_back("--kill-on-exit");
                 proot_args.push_back("-r");
-                proot_args.push_back(".");  // Current directory (rootfs)
+                proot_args.push_back(rootfs_rel.c_str());  // Rootfs relative to working directory
                 proot_args.push_back("-0");  // Fake root
                 proot_args.push_back("-w");
                 proot_args.push_back("/");   // Working directory inside container
@@ -1553,16 +1689,16 @@ int main(int argc, char* argv[]) {
             proot_args.push_back(nullptr);
             
             fprintf(stderr, "Starting container with proot...\n");
-            fprintf(stderr, "Working directory: %s\n", rootfs_path.c_str());
+            fprintf(stderr, "Working directory: %s\n", proot_working_dir.c_str());
             fprintf(stderr, "Init: %s\n", init_path.c_str());
             fprintf(stderr, "Verbose level: %s\n", proot_verbose_level);
-            if (!qemu_command.empty()) {
-                fprintf(stderr, "Command: %s --kill-on-exit -r . -0 -w / [bind mounts...] -v %s -q %s %s\n", 
-                        proot_path.c_str(), proot_verbose_level, qemu_command.c_str(), init_path.c_str());
-            } else {
-                fprintf(stderr, "Command: %s --kill-on-exit -r . -0 -w / [bind mounts...] -v %s %s\n", 
-                        proot_path.c_str(), proot_verbose_level, init_path.c_str());
+            
+            // Display full proot command line
+            fprintf(stderr, "Command: ");
+            for (size_t i = 0; proot_args[i] != nullptr; i++) {
+                fprintf(stderr, "%s ", proot_args[i]);
             }
+            fprintf(stderr, "\n");
             
             execvp(proot_path.c_str(), const_cast<char* const*>(proot_args.data()));
             
