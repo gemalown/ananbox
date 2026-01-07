@@ -5,14 +5,40 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".RendererActivity">
-<com.google.android.material.floatingactionbutton.FloatingActionButton
-    android:id="@+id/fab"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:layout_gravity="end|bottom"
-    android:src="@android:drawable/ic_menu_manage"
-    android:contentDescription="Settings"
-    android:layout_margin="4dp"
-    app:fabSize="mini"
-    app:backgroundTint="@android:color/transparent" />
+
+    <!-- Boot log overlay - shown during container startup -->
+    <RelativeLayout
+        android:id="@+id/bootLogLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:visibility="gone">
+
+        <com.github.ananbox.BootLogView
+            android:id="@+id/bootLogView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/bootStatusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="24dp"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:text="Starting container..." />
+    </RelativeLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:src="@android:drawable/ic_menu_manage"
+        android:contentDescription="Settings"
+        android:layout_margin="4dp"
+        app:fabSize="mini"
+        app:backgroundTint="@android:color/transparent" />
 </FrameLayout>

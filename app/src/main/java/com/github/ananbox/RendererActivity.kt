@@ -101,6 +101,10 @@ class RendererActivity : AppCompatActivity() {
         val displayMetrics = DisplayMetrics()
         defaultDisplay.getRealMetrics(displayMetrics)
         val dpi = displayMetrics.densityDpi
+        
+        // Show boot log overlay
+        showBootLog("Initializing container...")
+        
         Log.i(TAG, "Runtime initializing (JNI mode)..")
         if(Anbox.initRuntime(mSurfaceView.width, mSurfaceView.height, dpi)) {
             Anbox.createSurface(surface)
@@ -113,10 +117,17 @@ class RendererActivity : AppCompatActivity() {
             val initPath = MainActivity.getJniInitPath(applicationContext)
             val prootPath = applicationContext.applicationInfo.nativeLibraryDir + "/libproot.so"
             
+            updateBootStatus("Starting container...")
             Anbox.startContainer(prootPath, verboseLevel, initPath)
+            
+            // Hide boot log after a delay to allow container to start
+            mainHandler.postDelayed({
+                hideBootLog()
+            }, 5000)
         }
         else {
             Anbox.createSurface(surface)
+            hideBootLog()
         }
     }
     
@@ -131,6 +142,9 @@ class RendererActivity : AppCompatActivity() {
         val localAdbPort = MainActivity.getLocalAdbPort(this)
         
         Log.i(TAG, "Starting embedded server on $localServerAddress:$localPort (ADB: $localAdbAddress:$localAdbPort)")
+        
+        // Show boot log overlay
+        showBootLog("Starting embedded server...")
         
         // Ensure required directories exist
         ensureRequiredDirectories()
@@ -168,6 +182,11 @@ class RendererActivity : AppCompatActivity() {
                     "-t", prootTmpDir  // Explicitly pass tmp dir with exec permission
                 )
                 
+                // Add container logcat output to a file for the boot log view
+                val containerLogcatFile = File(filesDir, "container.logcat")
+                command.add("-l")
+                command.add(containerLogcatFile.absolutePath)
+                
                 Log.i(TAG, "Executing: ${command.joinToString(" ")}")
                 
                 val processBuilder = ProcessBuilder(command)
@@ -177,6 +196,7 @@ class RendererActivity : AppCompatActivity() {
                 embeddedServerProcess = processBuilder.start()
                 
                 mainHandler.post {
+                    updateBootStatus("Server started, connecting...")
                     Toast.makeText(this@RendererActivity, 
                         getString(R.string.embedded_server_started, localPort),
                         Toast.LENGTH_SHORT).show()
@@ -189,6 +209,11 @@ class RendererActivity : AppCompatActivity() {
                     remoteAddress = localServerAddress
                     remotePort = localPort
                     connectToRemoteServer(holder)
+                    
+                    // Hide boot log after connection is established
+                    mainHandler.postDelayed({
+                        hideBootLog()
+                    }, 5000)
                 }
                 
                 // Read server output in background and save to log file
@@ -228,6 +253,9 @@ class RendererActivity : AppCompatActivity() {
     private fun connectViaScrcpy(holder: SurfaceHolder) {
         Log.i(TAG, "Connecting via scrcpy to $remoteAddress:$scrcpyPort")
         
+        // Show boot log overlay
+        showBootLog("Connecting via scrcpy to $remoteAddress:$scrcpyPort...")
+        
         Toast.makeText(this, 
             getString(R.string.scrcpy_connecting, remoteAddress, scrcpyPort.toString()),
             Toast.LENGTH_SHORT).show()
@@ -239,6 +267,11 @@ class RendererActivity : AppCompatActivity() {
                 Toast.makeText(this@RendererActivity,
                     getString(R.string.scrcpy_connected, deviceName, width, height),
                     Toast.LENGTH_SHORT).show()
+                
+                // Hide boot log after successful connection
+                mainHandler.postDelayed({
+                    hideBootLog()
+                }, 2000)
             }
         }
         
@@ -293,6 +326,10 @@ class RendererActivity : AppCompatActivity() {
     private fun connectToRemoteServer(holder: SurfaceHolder) {
         Log.i(TAG, "Connecting to remote server: $remoteAddress:$remotePort")
         
+        // Show boot log overlay unless we're in embedded server mode (already shown)
+        if (!isEmbeddedServerMode) {
+            showBootLog("Connecting to $remoteAddress:$remotePort...")
+        }
         
         val displayMetrics = DisplayMetrics()
         
@@ -307,6 +344,11 @@ class RendererActivity : AppCompatActivity() {
                     Toast.makeText(this@RendererActivity, 
                         getString(R.string.remote_connected), 
                         Toast.LENGTH_SHORT).show()
+                    
+                    // Hide boot log after successful connection
+                    mainHandler.postDelayed({
+                        hideBootLog()
+                    }, 2000)
                 }
             }
             
@@ -514,6 +556,10 @@ class RendererActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        
+        // Clean up boot log view
+        binding.bootLogView.stop()
+        
         if (isRemoteMode || isEmbeddedServerMode) {
             streamingClient?.disconnect()
             stopEmbeddedServer()
@@ -661,6 +707,38 @@ class RendererActivity : AppCompatActivity() {
                     entry = tarInputStream.nextTarEntry
                 }
             }
+        }
+    }
+    
+    /**
+     * Show the boot log overlay with an optional status message
+     */
+    private fun showBootLog(statusMessage: String? = null) {
+        runOnUiThread {
+            binding.bootLogLayout.visibility = View.VISIBLE
+            statusMessage?.let {
+                binding.bootStatusText.text = it
+            }
+        }
+    }
+    
+    /**
+     * Update the boot status message
+     */
+    private fun updateBootStatus(statusMessage: String) {
+        runOnUiThread {
+            binding.bootStatusText.text = statusMessage
+        }
+    }
+    
+    /**
+     * Hide the boot log overlay
+     */
+    private fun hideBootLog() {
+        runOnUiThread {
+            binding.bootLogLayout.visibility = View.GONE
+            // Stop the boot log view to free resources
+            binding.bootLogView.stop()
         }
     }
 }
