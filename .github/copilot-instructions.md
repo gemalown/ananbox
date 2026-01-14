@@ -152,6 +152,34 @@ When exporting logs, the tarball includes:
 - Displays `container.logcat` in the log viewer along with other logs
 - Container logcat is included in exported log archives
 
+## Container Startup and PROOT_LOADER
+
+### Critical Environment Variables
+The container requires the `PROOT_LOADER` environment variable to be set for proper startup on Android systems with noexec restrictions on `/data` partitions.
+
+### Rootfs Structure
+- The rootfs is distributed as a separate archive: https://github.com/Ananbox/ananbox/releases
+- Contains `run.sh` script at `<base>/rootfs/run.sh`
+- The `run.sh` script expects: `$1 = base_path` (parent of rootfs), `$2 = proot_path`
+
+### Server Implementation (C++)
+- File: `app/src/main/cpp/anbox/src/server/main.cpp`
+- Before calling `run.sh`, the server MUST set:
+  - `PROOT_TMP_DIR` - Points to writable temp directory
+  - `PROOT_LOADER` - Points to `libproot-loader.so` in the same directory as proot
+- The loader path is typically: `<proot_dir>/libproot-loader.so`
+- Without PROOT_LOADER, proot will fail on Android due to noexec restrictions
+
+### App Implementation (Kotlin)
+- File: `app/src/main/java/com/github/ananbox/MainActivity.kt`
+- Sets PROOT_LOADER from `nativeLibraryDir/libproot-loader.so`
+- The native library directory has execute permissions, allowing the loader to run
+
+### JNI Implementation (C++)
+- File: `app/src/main/cpp/libanbox.cpp`
+- Sets PROOT_LOADER before starting container via proot
+- Uses the native library directory for the loader path
+
 ## Code Style
 
 ### AI-Generated File Headers

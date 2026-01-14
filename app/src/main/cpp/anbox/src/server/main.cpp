@@ -693,6 +693,18 @@ int main(int argc, char* argv[]) {
             // Set PROOT_TMP_DIR environment variable
             setenv("PROOT_TMP_DIR", tmp_dir.c_str(), 1);
             
+            // Set PROOT_LOADER if available (for platforms with noexec restrictions)
+            // This is critical for Android where /data has noexec flag
+            std::string proot_dir = get_parent_dir(proot_path);
+            std::string loader_path = proot_dir + "/libproot-loader.so";
+            if (access(loader_path.c_str(), F_OK) == 0) {
+                setenv("PROOT_LOADER", loader_path.c_str(), 1);
+                fprintf(stderr, "Using PROOT_LOADER: %s\n", loader_path.c_str());
+            } else {
+                fprintf(stderr, "Warning: PROOT_LOADER not found at %s\n", loader_path.c_str());
+                fprintf(stderr, "Container may fail to start on systems with noexec restrictions\n");
+            }
+            
             // Execute the script the same way as the app does:
             // sh $base_path/rootfs/run.sh $base_path $proot_path
             // The script expects: $1 = base_path (parent of rootfs), $2 = proot_path
