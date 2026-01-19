@@ -636,8 +636,30 @@ class RendererActivity : AppCompatActivity() {
         rootfsDir.mkdirs()
         val rootfsCanonicalPath = rootfsDir.canonicalPath
 
-        GZIPInputStream(BufferedInputStream(inputStream)).use { gzipInputStream ->
-            TarArchiveInputStream(gzipInputStream).use { tarInputStream ->
+        // Wrap input stream in BufferedInputStream for mark/reset support
+        val bufferedInputStream = BufferedInputStream(inputStream)
+
+        // Try GZIP first, fall back to plain TAR
+        val archiveInputStream = try {
+            // Check if it's GZIP format
+            bufferedInputStream.mark(2)
+            val magic = ByteArray(2)
+            bufferedInputStream.read(magic)
+            bufferedInputStream.reset()
+
+            // GZIP magic number: 0x1f 0x8b
+            if (magic[0] == 0x1f.toByte() && magic[1] == 0x8b.toByte()) {
+                GZIPInputStream(bufferedInputStream)
+            } else {
+                bufferedInputStream
+            }
+        } catch (e: Exception) {
+            // If check fails, assume plain stream (fallback)
+            bufferedInputStream
+        }
+
+        try {
+            TarArchiveInputStream(archiveInputStream).use { tarInputStream ->
                 var entry = tarInputStream.nextTarEntry
                 while (entry != null) {
                     val destFile = File(rootfsDir, entry.name)
@@ -706,6 +728,11 @@ class RendererActivity : AppCompatActivity() {
                     }
                     entry = tarInputStream.nextTarEntry
                 }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to extract tar archive", e)
+            runOnUiThread {
+                Toast.makeText(this, "Failed to extract archive: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
