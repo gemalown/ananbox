@@ -324,8 +324,10 @@ class AdbHelper(
         val arg0 = buf.int
         val arg1 = buf.int
         val dataLength = buf.int
-        val dataCheck = buf.int
-        val magic = buf.int
+        // We read these to advance the buffer, but don't use them currently
+        // Suppress unused variable warning
+        @Suppress("UNUSED_VARIABLE") val dataCheck = buf.int
+        @Suppress("UNUSED_VARIABLE") val magic = buf.int
         
         val data = if (dataLength > 0) {
             val d = ByteArray(dataLength)
