@@ -363,7 +363,6 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
         "-w", "/",  // Working directory inside container
         "-b", "/dev",
         "-b", "/proc",
-        "-b", "/sys",
         "-b", "dev/kmsg:/dev/kmsg",
         "-b", "dev/pmsg0:/dev/pmsg0",
         "-b", "system/vendor:/vendor",
@@ -386,7 +385,7 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
     __android_log_print(ANDROID_LOG_INFO, TAG, "PROOT_TMP_DIR: ./tmp");
     
     // Display full proot command for debugging
-    __android_log_print(ANDROID_LOG_INFO, TAG, "Command: %s --kill-on-exit -r . -0 -w / -b /dev -b /proc -b /sys -b dev/kmsg:/dev/kmsg -b dev/pmsg0:/dev/pmsg0 -b system/vendor:/vendor -b dev/__properties__:/dev/__properties__ -b dev/socket:/dev/socket -b /dev/binder -b /dev/ashmem -b ../qemu_pipe:/dev/qemu_pipe -b dev/input:/dev/input -b mnt/user/0:/storage/self -v %s %s", proot, verbose_str, init_path);
+    __android_log_print(ANDROID_LOG_INFO, TAG, "Command: %s --kill-on-exit -r . -0 -w / -b /dev -b /proc -b dev/kmsg:/dev/kmsg -b dev/pmsg0:/dev/pmsg0 -b system/vendor:/vendor -b dev/__properties__:/dev/__properties__ -b dev/socket:/dev/socket -b /dev/binder -b /dev/ashmem -b ../qemu_pipe:/dev/qemu_pipe -b dev/input:/dev/input -b mnt/user/0:/storage/self -v %s %s", proot, verbose_str, init_path);
     
     // Redirect stdout/stderr to a log file for debugging
     char log_path[PATH_MAX];
@@ -1657,9 +1656,6 @@ int main(int argc, char* argv[]) {
                 proot_args.push_back("/dev");
                 proot_args.push_back("-b");
                 proot_args.push_back("/proc");
-                proot_args.push_back("-b");
-                proot_args.push_back("/sys");
-                
                 // Bind specific device files (using relative paths from rootfs)
                 proot_args.push_back("-b");
                 proot_args.push_back(bind_dev_kmsg.c_str());
