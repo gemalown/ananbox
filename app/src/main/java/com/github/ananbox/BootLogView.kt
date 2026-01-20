@@ -19,6 +19,7 @@ import android.view.View
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.io.InterruptedIOException
 import java.util.LinkedList
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -201,6 +202,8 @@ class BootLogView @JvmOverloads constructor(
                     SystemClock.sleep(100)
                 }
             }
+        } catch (e: InterruptedIOException) {
+            Log.d(TAG, "File reading interrupted (shutdown)")
         } catch (e: Exception) {
             Log.e(TAG, "Error reading from file", e)
         } finally {
@@ -228,6 +231,8 @@ class BootLogView @JvmOverloads constructor(
                 val line = reader.readLine() ?: break
                 addLogLine(line)
             }
+        } catch (e: InterruptedIOException) {
+            Log.d(TAG, "Logcat reading interrupted (shutdown)")
         } catch (e: Exception) {
             Log.e(TAG, "Error reading from logcat", e)
         } finally {

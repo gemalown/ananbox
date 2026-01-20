@@ -293,10 +293,10 @@ class StreamingClient {
                     continue
                 }
                 
-                val version = header.get()
+                @Suppress("UNUSED_VARIABLE") val version = header.get()
                 val type = header.get()
                 val payloadSize = header.int
-                val seq = header.int
+                @Suppress("UNUSED_VARIABLE") val seq = header.int
                 
                 // Validate payload size to prevent memory exhaustion
                 if (payloadSize < 0 || payloadSize > MAX_PAYLOAD_SIZE) {
@@ -372,10 +372,10 @@ class StreamingClient {
         val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
         val width = buffer.int
         val height = buffer.int
-        val format = buffer.int
+        @Suppress("UNUSED_VARIABLE") val format = buffer.int
         val stride = buffer.int
-        val timestamp = buffer.long
-        val flags = buffer.int
+        @Suppress("UNUSED_VARIABLE") val timestamp = buffer.long
+        @Suppress("UNUSED_VARIABLE") val flags = buffer.int
         
         // Validate dimensions to prevent integer overflow and memory issues
         if (width <= 0 || height <= 0 || stride <= 0 ||
@@ -418,7 +418,7 @@ class StreamingClient {
         displayWidth = buffer.int
         displayHeight = buffer.int
         displayDpi = buffer.int
-        val format = buffer.int
+        @Suppress("UNUSED_VARIABLE") val format = buffer.int
         
         Log.i(TAG, "Display config updated: ${displayWidth}x${displayHeight}@${displayDpi}dpi")
         listener?.onDisplayConfigChanged(displayWidth, displayHeight, displayDpi)
@@ -431,7 +431,7 @@ class StreamingClient {
         
         val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
         val size = buffer.int
-        val timestamp = buffer.long
+        @Suppress("UNUSED_VARIABLE") val timestamp = buffer.long
         
         if (payload.size < 12 + size) {
             return

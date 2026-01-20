@@ -227,15 +227,71 @@ Java_com_github_ananbox_Anbox_initRuntime(
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring proot_, jint verbose_level, jstring init_path_) {
-    if (fork() != 0) {
+    // Extract strings in parent before forking to be safe
+    const char *proot_cstr = env->GetStringUTFChars(proot_, 0);
+    const char *init_path_cstr = env->GetStringUTFChars(init_path_, 0);
+
+    std::string proot_str = proot_cstr;
+    std::string init_path_str = init_path_cstr;
+
+    env->ReleaseStringUTFChars(proot_, proot_cstr);
+    env->ReleaseStringUTFChars(init_path_, init_path_cstr);
+
+    // Create a pipe for redirecting stdout/stderr to logcat
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "Failed to create pipe: %s", strerror(errno));
         return;
     }
+
+    if (fork() != 0) {
+        // Parent process
+        close(pipefd[1]); // Close write end
+
+        // Spawn a thread to pump output from pipe to logcat
+        std::thread logger([pipefd]() {
+            FILE* pipe_fp = fdopen(pipefd[0], "r");
+            if (pipe_fp) {
+                char buffer[1024];
+                while (fgets(buffer, sizeof(buffer), pipe_fp) != nullptr) {
+                    // Remove trailing newline
+                    size_t len = strlen(buffer);
+                    if (len > 0 && buffer[len - 1] == '\n') {
+                        buffer[len - 1] = '\0';
+                    }
+                    if (buffer[0] != '\0') {
+                        __android_log_print(ANDROID_LOG_INFO, "proot", "%s", buffer);
+                    }
+                }
+                fclose(pipe_fp);
+            } else {
+                close(pipefd[0]);
+            }
+        });
+        logger.detach(); // Let it run independently
+
+        return;
+    }
+
+    // Child process
+    close(pipefd[0]); // Close read end
+
+    // Redirect stdout and stderr to the pipe
+    if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "Failed to dup2 stdout: %s", strerror(errno));
+    }
+    if (dup2(pipefd[1], STDERR_FILENO) == -1) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "Failed to dup2 stderr: %s", strerror(errno));
+    }
+    close(pipefd[1]); // Close write end (duplicated)
+
     sigset_t signals_to_unblock;
     sigfillset(&signals_to_unblock);
     sigprocmask(SIG_UNBLOCK, &signals_to_unblock, 0);
     
-    const char *proot = env->GetStringUTFChars(proot_, 0);
-    const char *init_path = env->GetStringUTFChars(init_path_, 0);
+    // Use the copied std::string values
+    const char *proot = proot_str.c_str();
+    const char *init_path = init_path_str.c_str();
     
     // Convert verbose level to string for proot -v option
     char verbose_str[8];
@@ -249,8 +305,6 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
     // Validate the path length to prevent buffer overflow
     if (proot_len >= PATH_MAX) {
         __android_log_print(ANDROID_LOG_ERROR, TAG, "proot path too long");
-        env->ReleaseStringUTFChars(proot_, proot);
-        env->ReleaseStringUTFChars(init_path_, init_path);
         _exit(1);
     }
     
@@ -261,8 +315,6 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
         *last_slash = '\0';  // Remove the filename, keep directory
     } else {
         __android_log_print(ANDROID_LOG_ERROR, TAG, "Invalid proot path: no directory separator found");
-        env->ReleaseStringUTFChars(proot_, proot);
-        env->ReleaseStringUTFChars(init_path_, init_path);
         _exit(1);
     }
     
@@ -328,8 +380,6 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
     if (chdir(rootfs_path) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, TAG, "Failed to change to rootfs directory %s: %s", 
                            rootfs_path, strerror(errno));
-        env->ReleaseStringUTFChars(proot_, proot);
-        env->ReleaseStringUTFChars(init_path_, init_path);
         _exit(1);
     }
     
@@ -388,10 +438,11 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
     // Display full proot command for debugging
     __android_log_print(ANDROID_LOG_INFO, TAG, "Command: %s --kill-on-exit -r . -0 -w / -b /dev -b /proc -b /sys -b dev/kmsg:/dev/kmsg -b dev/pmsg0:/dev/pmsg0 -b system/vendor:/vendor -b dev/__properties__:/dev/__properties__ -b dev/socket:/dev/socket -b /dev/binder -b /dev/ashmem -b ../qemu_pipe:/dev/qemu_pipe -b dev/input:/dev/input -b mnt/user/0:/storage/self -v %s %s", proot, verbose_str, init_path);
     
-    env->ReleaseStringUTFChars(proot_, proot);
-    env->ReleaseStringUTFChars(init_path_, init_path);
+    // Execute proot
     execvp(proot_args[0], const_cast<char* const*>(proot_args));
     
+    // If execvp fails, write error to stderr (redirected to logcat)
+    fprintf(stderr, "Failed to start container: %s\n", strerror(errno));
     __android_log_print(ANDROID_LOG_ERROR, TAG, "Failed to start container: %s", strerror(errno));
     _exit(1);
  }

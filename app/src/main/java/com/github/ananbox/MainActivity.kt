@@ -1323,74 +1323,94 @@ class MainActivity : AppCompatActivity() {
             rootfsDir.mkdirs()
             val rootfsCanonicalPath = rootfsDir.canonicalPath
 
-            GZIPInputStream(BufferedInputStream(inputStream)).use { gzipInputStream ->
-                TarArchiveInputStream(gzipInputStream).use { tarInputStream ->
-                    var entry = tarInputStream.nextTarEntry
-                    while (entry != null) {
-                        val destFile = File(rootfsDir, entry.name)
-                        
-                        // Validate path to prevent path traversal attacks
-                        if (!destFile.canonicalPath.startsWith(rootfsCanonicalPath)) {
-                            Log.w(TAG, "Skipping entry outside destination: ${entry.name}")
-                            entry = tarInputStream.nextTarEntry
-                            continue
-                        }
-                        
-                        if (entry.isDirectory) {
-                            destFile.mkdirs()
-                        } else {
-                            destFile.parentFile?.mkdirs()
-                            if (entry.isSymbolicLink) {
-                                // Handle symbolic links with validation
-                                val linkTarget = entry.linkName
-                                
-                                // Validate symlink target to prevent escape attacks
-                                val isAbsolute = linkTarget.startsWith("/")
-                                val wouldEscape = if (isAbsolute) {
-                                    // Allow absolute symlinks: proot virtualizes the filesystem,
-                                    // so absolute symlinks inside the rootfs resolve within the
-                                    // proot environment and cannot escape to the host filesystem.
-                                    false
-                                } else {
-                                    var currentPath: File? = destFile.parentFile
-                                    for (component in linkTarget.split("/")) {
-                                        when (component) {
-                                            ".." -> currentPath = currentPath?.parentFile
-                                            ".", "" -> { /* ignore */ }
-                                            else -> currentPath = currentPath?.let { File(it, component) }
-                                        }
-                                    }
-                                    currentPath?.let { 
-                                        !it.absolutePath.startsWith(rootfsCanonicalPath) 
-                                    } ?: true
-                                }
-                                
-                                if (wouldEscape) {
-                                    Log.w(TAG, "Skipping unsafe symlink: ${destFile.path} -> $linkTarget")
-                                } else {
-                                    try {
-                                        java.nio.file.Files.deleteIfExists(destFile.toPath())
-                                        java.nio.file.Files.createSymbolicLink(
-                                            destFile.toPath(),
-                                            java.nio.file.Paths.get(linkTarget)
-                                        )
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to create symlink: ${destFile.path} -> $linkTarget: ${e.message}")
-                                    }
-                                }
+            // Wrap input stream in BufferedInputStream for mark/reset support
+            val bufferedInputStream = BufferedInputStream(inputStream)
+
+            // Try GZIP first, fall back to plain TAR
+            val archiveInputStream = try {
+                // Check if it's GZIP format
+                bufferedInputStream.mark(2)
+                val magic = ByteArray(2)
+                bufferedInputStream.read(magic)
+                bufferedInputStream.reset()
+
+                // GZIP magic number: 0x1f 0x8b
+                if (magic[0] == 0x1f.toByte() && magic[1] == 0x8b.toByte()) {
+                    GZIPInputStream(bufferedInputStream)
+                } else {
+                    bufferedInputStream
+                }
+            } catch (e: Exception) {
+                // If check fails, assume plain stream (fallback)
+                bufferedInputStream
+            }
+
+            TarArchiveInputStream(archiveInputStream).use { tarInputStream ->
+                var entry = tarInputStream.nextTarEntry
+                while (entry != null) {
+                    val destFile = File(rootfsDir, entry.name)
+
+                    // Validate path to prevent path traversal attacks
+                    if (!destFile.canonicalPath.startsWith(rootfsCanonicalPath)) {
+                        Log.w(TAG, "Skipping entry outside destination: ${entry.name}")
+                        entry = tarInputStream.nextTarEntry
+                        continue
+                    }
+
+                    if (entry.isDirectory) {
+                        destFile.mkdirs()
+                    } else {
+                        destFile.parentFile?.mkdirs()
+                        if (entry.isSymbolicLink) {
+                            // Handle symbolic links with validation
+                            val linkTarget = entry.linkName
+
+                            // Validate symlink target to prevent escape attacks
+                            val isAbsolute = linkTarget.startsWith("/")
+                            val wouldEscape = if (isAbsolute) {
+                                // Allow absolute symlinks: proot virtualizes the filesystem,
+                                // so absolute symlinks inside the rootfs resolve within the
+                                // proot environment and cannot escape to the host filesystem.
+                                false
                             } else {
-                                FileOutputStream(destFile).use { fos ->
-                                    tarInputStream.copyTo(fos)
+                                var currentPath: File? = destFile.parentFile
+                                for (component in linkTarget.split("/")) {
+                                    when (component) {
+                                        ".." -> currentPath = currentPath?.parentFile
+                                        ".", "" -> { /* ignore */ }
+                                        else -> currentPath = currentPath?.let { File(it, component) }
+                                    }
                                 }
-                                // Preserve file permissions (owner execute only)
-                                val mode = entry.mode
-                                if (mode and OWNER_EXECUTE_PERMISSION != 0) {
-                                    destFile.setExecutable(true, true)
+                                currentPath?.let {
+                                    !it.absolutePath.startsWith(rootfsCanonicalPath)
+                                } ?: true
+                            }
+
+                            if (wouldEscape) {
+                                Log.w(TAG, "Skipping unsafe symlink: ${destFile.path} -> $linkTarget")
+                            } else {
+                                try {
+                                    java.nio.file.Files.deleteIfExists(destFile.toPath())
+                                    java.nio.file.Files.createSymbolicLink(
+                                        destFile.toPath(),
+                                        java.nio.file.Paths.get(linkTarget)
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to create symlink: ${destFile.path} -> $linkTarget: ${e.message}")
                                 }
                             }
+                        } else {
+                            FileOutputStream(destFile).use { fos ->
+                                tarInputStream.copyTo(fos)
+                            }
+                            // Preserve file permissions (owner execute only)
+                            val mode = entry.mode
+                            if (mode and OWNER_EXECUTE_PERMISSION != 0) {
+                                destFile.setExecutable(true, true)
+                            }
                         }
-                        entry = tarInputStream.nextTarEntry
                     }
+                    entry = tarInputStream.nextTarEntry
                 }
             }
         }

@@ -82,7 +82,7 @@ class StorageProvider: DocumentsProvider() {
     ): Cursor? {
         val result = MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION)
         val parent = getFileForDocId(parentDocumentId)
-        for (file in parent.listFiles()) {
+        parent.listFiles()?.forEach { file ->
             includeFile(result, null, file)
         }
         return result
@@ -183,7 +183,7 @@ class StorageProvider: DocumentsProvider() {
             }
             if (isInsideHome) {
                 if (file.isDirectory) {
-                    Collections.addAll(pending, *file.listFiles())
+                    file.listFiles()?.let { Collections.addAll(pending, *it) }
                 } else {
                     if (file.name.lowercase(Locale.getDefault()).contains(query!!)) {
                         includeFile(result, null, file)
@@ -243,29 +243,33 @@ class StorageProvider: DocumentsProvider() {
      */
     @Throws(FileNotFoundException::class)
     private fun includeFile(result: MatrixCursor, docId: String?, file: File?) {
-        var docId = docId
-        var file = file
+        val resolvedDocId: String
+        val resolvedFile: File
+
         if (docId == null) {
-            docId = getDocIdForFile(file)
+            resolvedDocId = getDocIdForFile(file) ?: throw FileNotFoundException("File path is null")
+            resolvedFile = file ?: throw FileNotFoundException("File is null")
         } else {
-            file = getFileForDocId(docId)
+            resolvedDocId = docId
+            resolvedFile = getFileForDocId(docId)
         }
+
         var flags = 0
-        if (file!!.isDirectory) {
-            if (file.canWrite()) flags = flags or DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
-        } else if (file.canWrite()) {
+        if (resolvedFile.isDirectory) {
+            if (resolvedFile.canWrite()) flags = flags or DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
+        } else if (resolvedFile.canWrite()) {
             flags = flags or DocumentsContract.Document.FLAG_SUPPORTS_WRITE
         }
-        if (file.parentFile.canWrite()) flags = flags or DocumentsContract.Document.FLAG_SUPPORTS_DELETE
-        val displayName = file.name
-        val mimeType = getMimeType(file)
+        if (resolvedFile.parentFile?.canWrite() == true) flags = flags or DocumentsContract.Document.FLAG_SUPPORTS_DELETE
+        val displayName = resolvedFile.name
+        val mimeType = getMimeType(resolvedFile)
         if (mimeType.startsWith("image/")) flags = flags or DocumentsContract.Document.FLAG_SUPPORTS_THUMBNAIL
         val row = result.newRow()
-        row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, docId)
+        row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, resolvedDocId)
         row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, displayName)
-        row.add(DocumentsContract.Document.COLUMN_SIZE, file.length())
+        row.add(DocumentsContract.Document.COLUMN_SIZE, resolvedFile.length())
         row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, mimeType)
-        row.add(DocumentsContract.Document.COLUMN_LAST_MODIFIED, file.lastModified())
+        row.add(DocumentsContract.Document.COLUMN_LAST_MODIFIED, resolvedFile.lastModified())
         row.add(DocumentsContract.Document.COLUMN_FLAGS, flags)
         row.add(DocumentsContract.Document.COLUMN_ICON, R.mipmap.ic_launcher)
     }
