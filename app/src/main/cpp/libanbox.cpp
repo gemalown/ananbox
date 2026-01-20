@@ -388,10 +388,25 @@ Java_com_github_ananbox_Anbox_startContainer(JNIEnv *env, jobject thiz, jstring 
     // Display full proot command for debugging
     __android_log_print(ANDROID_LOG_INFO, TAG, "Command: %s --kill-on-exit -r . -0 -w / -b /dev -b /proc -b /sys -b dev/kmsg:/dev/kmsg -b dev/pmsg0:/dev/pmsg0 -b system/vendor:/vendor -b dev/__properties__:/dev/__properties__ -b dev/socket:/dev/socket -b /dev/binder -b /dev/ashmem -b ../qemu_pipe:/dev/qemu_pipe -b dev/input:/dev/input -b mnt/user/0:/storage/self -v %s %s", proot, verbose_str, init_path);
     
+    // Redirect stdout/stderr to a log file for debugging
+    char log_path[PATH_MAX];
+    snprintf(log_path, sizeof(log_path), "%s/proot.log", path);
+    int log_fd = open(log_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (log_fd >= 0) {
+        dup2(log_fd, STDOUT_FILENO);
+        dup2(log_fd, STDERR_FILENO);
+        close(log_fd);
+        __android_log_print(ANDROID_LOG_INFO, TAG, "Redirected proot output to %s", log_path);
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "Failed to open log file %s: %s", log_path, strerror(errno));
+    }
+
     env->ReleaseStringUTFChars(proot_, proot);
     env->ReleaseStringUTFChars(init_path_, init_path);
     execvp(proot_args[0], const_cast<char* const*>(proot_args));
     
+    // If execvp fails, write error to log file too
+    fprintf(stderr, "Failed to start container: %s\n", strerror(errno));
     __android_log_print(ANDROID_LOG_ERROR, TAG, "Failed to start container: %s", strerror(errno));
     _exit(1);
  }
