@@ -960,12 +960,6 @@ class MainActivity : AppCompatActivity() {
                             val deviceInfo = collectDeviceInfo()
                             addStringToTar(tarOs, deviceInfo, "device_info.txt")
                             
-                            // Add dmesg if available (requires root or specific permissions)
-                            val dmesgOutput = collectDmesg()
-                            if (dmesgOutput.isNotEmpty()) {
-                                addStringToTar(tarOs, dmesgOutput, "dmesg.txt")
-                            }
-                            
                             // Add settings info
                             val verboseEnabled = isVerboseModeEnabled(context)
                             val connectionMode = getConnectionMode(context)
@@ -1142,26 +1136,6 @@ class MainActivity : AppCompatActivity() {
             }
             
             return output.toString()
-        }
-        
-        private fun collectDmesg(): String {
-            return try {
-                val process = Runtime.getRuntime().exec(arrayOf("dmesg"))
-                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                val output = StringBuilder()
-                output.append("=== Kernel Log (dmesg) ===\n")
-                output.append("Timestamp: ${Date()}\n\n")
-                reader.useLines { lines ->
-                    lines.forEach { line ->
-                        output.append(line).append("\n")
-                    }
-                }
-                process.waitFor()
-                output.toString()
-            } catch (e: Exception) {
-                // dmesg often requires root, so we silently fail
-                ""
-            }
         }
         
         private fun exportLogsAsText() {
